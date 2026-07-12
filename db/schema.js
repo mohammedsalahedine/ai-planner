@@ -74,7 +74,8 @@ async function initDB() {
       reading_speed REAL DEFAULT 30,
       course_speed REAL DEFAULT 1,
       weekend_hours REAL DEFAULT 4,
-      theme TEXT DEFAULT 'dark'
+      theme TEXT DEFAULT 'dark',
+      openai_key TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS tasks (
@@ -92,6 +93,11 @@ async function initDB() {
       status TEXT DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT NOW()
     );
+
+    DO $$ BEGIN
+      ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS openai_key TEXT DEFAULT '';
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS schedule (
       id SERIAL PRIMARY KEY,

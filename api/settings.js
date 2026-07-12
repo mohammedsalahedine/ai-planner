@@ -22,11 +22,11 @@ router.put('/', async (req, res) => {
     await db.prepare('INSERT INTO user_settings (user_id) VALUES ($1)').run(req.userId);
     settings = await db.prepare('SELECT * FROM user_settings WHERE user_id = $1').get(req.userId);
   }
-  const { daily_hours, rest_days, day_start, day_end, break_duration, reading_speed, course_speed, weekend_hours, theme } = req.body;
+  const { daily_hours, rest_days, day_start, day_end, break_duration, reading_speed, course_speed, weekend_hours, theme, openai_key } = req.body;
   await db.prepare(`
     UPDATE user_settings SET daily_hours=$1, rest_days=$2, day_start=$3, day_end=$4,
-    break_duration=$5, reading_speed=$6, course_speed=$7, weekend_hours=$8, theme=$9
-    WHERE user_id=$10
+    break_duration=$5, reading_speed=$6, course_speed=$7, weekend_hours=$8, theme=$9, openai_key=$10
+    WHERE user_id=$11
   `).run(
     daily_hours ?? settings.daily_hours,
     JSON.stringify(rest_days) ?? settings.rest_days,
@@ -37,6 +37,7 @@ router.put('/', async (req, res) => {
     course_speed ?? settings.course_speed,
     weekend_hours ?? settings.weekend_hours,
     theme ?? settings.theme,
+    openai_key ?? settings.openai_key ?? '',
     req.userId
   );
   const updated = await db.prepare('SELECT * FROM user_settings WHERE user_id = $1').get(req.userId);

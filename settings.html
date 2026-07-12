@@ -76,6 +76,17 @@
             </div>
           </div>
 
+          <div class="card" style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:1rem;">الذكاء الاصطناعي</h3>
+            <div class="form-group">
+              <label>مفتاح OpenAI API</label>
+              <input type="password" id="openaiKey" placeholder="sk-...">
+              <small style="color:var(--muted);font-size:0.75rem;display:block;margin-top:0.25rem;">
+                أضف مفتاحك من platform.openai.com لتفعيل الجدولة الذكية. بدون مفتاح، يُستخدم خوارزمية الأولوية.
+              </small>
+            </div>
+          </div>
+
           <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;justify-content:center;padding:0.75rem;">
             حفظ الإعدادات
           </button>
@@ -115,6 +126,7 @@
       document.getElementById('breakDuration').value = s.break_duration;
       document.getElementById('readingSpeed').value = s.reading_speed;
       document.getElementById('courseSpeed').value = s.course_speed;
+      document.getElementById('openaiKey').value = s.openai_key || '';
       restDays = JSON.parse(s.rest_days || '[]');
       renderRestDays();
       updateThemeButtons();
@@ -135,7 +147,8 @@
         break_duration: parseFloat(document.getElementById('breakDuration').value),
         reading_speed: parseFloat(document.getElementById('readingSpeed').value),
         course_speed: parseFloat(document.getElementById('courseSpeed').value),
-        rest_days: restDays
+        rest_days: restDays,
+        openai_key: document.getElementById('openaiKey').value.trim()
       };
       await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify(body) });
       toast('تم حفظ الإعدادات');
