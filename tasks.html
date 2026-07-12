@@ -169,30 +169,41 @@
         total_units: parseFloat(document.getElementById('taskUnits').value) || 0,
         unit_type: document.getElementById('taskUnitType').value,
       };
-      if (id) {
-        body.completed_units = parseFloat(document.getElementById('taskCompleted').value) || 0;
-        body.status = document.getElementById('taskStatus').value;
-        await apiFetch(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) });
-        toast('تم تعديل المهمة');
-      } else {
-        await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(body) });
-        toast('تم إضافة المهمة');
+      try {
+        if (id) {
+          body.completed_units = parseFloat(document.getElementById('taskCompleted').value) || 0;
+          body.status = document.getElementById('taskStatus').value;
+          const result = await apiFetch(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+          if (result && result.error) { toast(result.error, 'error'); return; }
+          toast('تم تعديل المهمة');
+        } else {
+          const result = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(body) });
+          if (result && result.error) { toast(result.error, 'error'); return; }
+          toast('تم إضافة المهمة');
+        }
+        closeModal();
+        loadTasks();
+      } catch (err) {
+        toast('حدث خطأ: ' + err.message, 'error');
       }
-      closeModal();
-      loadTasks();
     }
 
     async function deleteTask(id) {
       if (!confirm('هل أنت متأكد من حذف هذه المهمة؟')) return;
-      await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
-      toast('تم حذف المهمة');
-      loadTasks();
+      try {
+        await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+        toast('تم حذف المهمة');
+        loadTasks();
+      } catch (err) {
+        toast('حدث خطأ أثناء الحذف', 'error');
+      }
     }
 
     async function loadTasks() {
       const filter = document.getElementById('filterCategory').value;
-      const tasks = await apiFetch('/api/tasks');
-      if (!tasks) return;
+      try {
+        const tasks = await apiFetch('/api/tasks');
+        if (!tasks || tasks.error) return;
       allTasks = tasks;
       const filtered = filter ? tasks.filter(t => t.category === filter) : tasks;
       const container = document.getElementById('tasksContainer');
@@ -253,6 +264,9 @@
           </table>
         </div>
       `;
+      } catch (err) {
+        console.error('Load tasks error:', err);
+      }
     }
 
     loadTasks();
