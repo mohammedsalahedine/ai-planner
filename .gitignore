@@ -1,6 +1,4 @@
 node_modules/
-db/*.db
-db/*.db-wal
-db/*.db-shm
-.env
-.DS_Store
+db/planner.db*
+*.artifact.json
+${APPDATA}/

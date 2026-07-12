@@ -75,7 +75,8 @@ async function initDB() {
       course_speed REAL DEFAULT 1,
       weekend_hours REAL DEFAULT 4,
       theme TEXT DEFAULT 'dark',
-      openai_key TEXT DEFAULT ''
+      ai_key TEXT DEFAULT '',
+      ai_provider TEXT DEFAULT 'gemini'
     );
 
     CREATE TABLE IF NOT EXISTS tasks (
@@ -95,7 +96,11 @@ async function initDB() {
     );
 
     DO $$ BEGIN
-      ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS openai_key TEXT DEFAULT '';
+      ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_key TEXT DEFAULT '';
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS ai_provider TEXT DEFAULT 'gemini';
     EXCEPTION WHEN duplicate_column THEN NULL;
     END $$;
 

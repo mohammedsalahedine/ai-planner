@@ -77,12 +77,24 @@
           </div>
 
           <div class="card" style="margin-bottom:1rem;">
-            <h3 style="margin-bottom:1rem;">الذكاء الاصطناعي</h3>
+            <h3 style="margin-bottom:1rem;">الذكاء الاصطناعي (مجاني)</h3>
             <div class="form-group">
-              <label>مفتاح OpenAI API</label>
-              <input type="password" id="openaiKey" placeholder="sk-...">
+              <label>مزود AI</label>
+              <select id="aiProvider" style="width:100%;padding:0.5rem;border-radius:0.5rem;border:1px solid var(--border);background:var(--surface);color:var(--fg);font-size:0.9rem;margin-bottom:0.75rem;">
+                <option value="gemini">Google Gemini (مجاني — 1,500 طلب/يوم)</option>
+                <option value="groq">Groq (مجاني — 1,000 طلب/يوم، Llama 3.3)</option>
+                <option value="openrouter">OpenRouter (مجاني — 20+ نموذج)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>مفتاح API</label>
+              <input type="password" id="aiKey" placeholder="أدخل مفتاح API">
               <small style="color:var(--muted);font-size:0.75rem;display:block;margin-top:0.25rem;">
-                أضف مفتاحك من platform.openai.com لتفعيل الجدولة الذكية. بدون مفتاح، يُستخدم خوارزمية الأولوية.
+                <strong>Google Gemini (مُوصى به — مجاني بالكامل):</strong><br>
+                1. افتح <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/apikey</a><br>
+                2. اضغط "Create API Key" ← انسخ المفتاح<br>
+                3. الصقه هنا ← اختر المزود ← احفظ<br><br>
+                <strong>الحدود المجانية:</strong> 1,500 طلب/يوم، بدون بطاقة ائتمان، بدون انتهاء صلاحية.
               </small>
             </div>
           </div>
@@ -126,7 +138,8 @@
       document.getElementById('breakDuration').value = s.break_duration;
       document.getElementById('readingSpeed').value = s.reading_speed;
       document.getElementById('courseSpeed').value = s.course_speed;
-      document.getElementById('openaiKey').value = s.openai_key || '';
+      document.getElementById('aiKey').value = s.ai_key || '';
+      document.getElementById('aiProvider').value = s.ai_provider || 'gemini';
       restDays = JSON.parse(s.rest_days || '[]');
       renderRestDays();
       updateThemeButtons();
@@ -148,7 +161,8 @@
         reading_speed: parseFloat(document.getElementById('readingSpeed').value),
         course_speed: parseFloat(document.getElementById('courseSpeed').value),
         rest_days: restDays,
-        openai_key: document.getElementById('openaiKey').value.trim()
+        ai_key: document.getElementById('aiKey').value.trim(),
+        ai_provider: document.getElementById('aiProvider').value
       };
       await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify(body) });
       toast('تم حفظ الإعدادات');

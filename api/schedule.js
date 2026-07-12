@@ -1,5 +1,4 @@
 const express = require('express');
-const OpenAI = require('openai');
 const { getDB } = require('../db/schema');
 const { auth } = require('../middleware/auth');
 
@@ -18,10 +17,104 @@ function calculateTimeNeeded(task, settings) {
   }
 }
 
-function getClient(settings) {
-  const key = settings.openai_key || process.env.OPENAI_API_KEY;
+async function callGeminiAPI(settings, systemPrompt, userPrompt) {
+  const key = settings.ai_key || process.env.AI_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json'
+        }
+      })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Gemini ${resp.status}: ${errText}`);
+    }
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('No response from Gemini');
+    return JSON.parse(text);
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function callOpenRouter(settings, systemPrompt, userPrompt) {
+  const key = settings.ai_key || process.env.AI_KEY;
+  if (!key) return null;
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4096,
+        response_format: { type: 'json_object' }
+      })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`OpenRouter ${resp.status}: ${errText}`);
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No response from OpenRouter');
+    return JSON.parse(content);
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function callGroq(settings, systemPrompt, userPrompt) {
+  const key = settings.ai_key || process.env.AI_KEY;
+  if (!key) return null;
+  try {
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4096,
+        response_format: { type: 'json_object' }
+      })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Groq ${resp.status}: ${errText}`);
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No response from Groq');
+    return JSON.parse(content);
+  } catch (err) {
+    throw err;
+  }
 }
 
 async function generateAISchedule(db, userId) {
@@ -31,14 +124,15 @@ async function generateAISchedule(db, userId) {
   const settings = await db.prepare('SELECT * FROM user_settings WHERE user_id = $1').get(userId);
   if (!settings) return { schedule: [], insights: '' };
 
-  await db.prepare('DELETE FROM schedule WHERE user_id = $1').run(userId);
+  const aiProvider = settings.ai_provider || 'gemini';
+  const key = settings.ai_key || process.env.AI_KEY;
 
-  const openai = getClient(settings);
-
-  if (!openai) {
+  if (!key) {
     const schedule = generateAlgorithmicSchedule(tasks, settings, db, userId);
-    return { schedule, insights: 'تم الإنشاء بخوارزمية الأولوية (أضف مفتاح OpenAI للجدولة الذكي)' };
+    return { schedule, insights: 'تم الإنشاء بخوارزمية الأولوية (أضف مفتاح AI مجاني في الإعدادات للجدولة الذكية)' };
   }
+
+  await db.prepare('DELETE FROM schedule WHERE user_id = $1').run(userId);
 
   const taskList = tasks.map(t => ({
     id: t.id,
@@ -60,7 +154,7 @@ async function generateAISchedule(db, userId) {
 مهمتك إنشاء جدول زمني ذكي ومحسن للمهام المرسلة إليك.
 
 قواعد مهمة:
-1. مرر المهام حسب الأولوية (عالية أولاً) مع مراعاة المواعيد النهائية
+1. رتب المهام حسب الأولوية (عالية أولاً) مع مراعاة المواعيد النهائية
 2. وزّع المهام على الأيام المتاحة بشكل متوازن
 3. مراعاة أوقات الراحة بين المهام
 4. مراعاة أيام الراحة (لا تضع مهام فيها)
@@ -69,7 +163,7 @@ async function generateAISchedule(db, userId) {
 7. اقتراح أفضل ترتيب للمهام في كل يوم
 8. حساب الوقت المتبقي لكل مهمة بعد الجدولة
 
-أرجع النتيجة بصيغة JSON فقط (بدلاً markdown):
+أرجع النتيجة بصيغة JSON فقط (بدون markdown):
 {
   "schedule": [
     {
@@ -102,19 +196,16 @@ ${JSON.stringify(taskList, null, 2)}
 أنشئ جدولًا ذكيًا يوزّع المهام على الأيام القادمة بشكل مثالي.`;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 4096,
-      response_format: { type: 'json_object' }
-    });
-
-    const content = completion.choices[0]?.message?.content;
-    const parsed = JSON.parse(content);
+    let parsed;
+    if (aiProvider === 'gemini') {
+      parsed = await callGeminiAPI(settings, systemPrompt, userPrompt);
+    } else if (aiProvider === 'openrouter') {
+      parsed = await callOpenRouter(settings, systemPrompt, userPrompt);
+    } else if (aiProvider === 'groq') {
+      parsed = await callGroq(settings, systemPrompt, userPrompt);
+    } else {
+      parsed = await callGeminiAPI(settings, systemPrompt, userPrompt);
+    }
 
     const scheduleEntries = [];
     for (const entry of (parsed.schedule || [])) {
