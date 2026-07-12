@@ -3,43 +3,50 @@ const bcrypt = require('bcryptjs');
 
 let pool;
 
-function convertParams(sql) {
-  let idx = 0;
-  return sql.replace(/\?/g, () => `$${++idx}`);
-}
-
-function getDB() {
+function getPool() {
   if (!pool) {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com')
         ? { rejectUnauthorized: false }
-        : false
+        : false,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      allowExitOnIdle: false
+    });
+    pool.on('error', (err) => {
+      console.error('Unexpected PG pool error:', err.message);
+      pool = null;
     });
   }
+  return pool;
+}
+
+function getDB() {
+  const p = getPool();
   return {
     prepare(sql) {
-      const pgSql = convertParams(sql);
       return {
         async run(...params) {
-          const r = await pool.query(pgSql, params);
+          const r = await p.query(sql, params);
           return {
             changes: r.rowCount,
             lastInsertRowid: r.rows[0] ? r.rows[0].id : null
           };
         },
         async get(...params) {
-          const r = await pool.query(pgSql, params);
+          const r = await p.query(sql, params);
           return r.rows[0] || undefined;
         },
         async all(...params) {
-          const r = await pool.query(pgSql, params);
+          const r = await p.query(sql, params);
           return r.rows;
         }
       };
     },
     async exec(sql) {
-      await pool.query(sql);
+      await p.query(sql);
     }
   };
 }
