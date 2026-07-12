@@ -17,10 +17,10 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Email already exists' });
   }
   const hash = bcrypt.hashSync(password, 10);
-  const result = await db.prepare('INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id').run(name, email, hash);
-  await db.prepare('INSERT INTO user_settings (user_id) VALUES ($1)').run(result.lastInsertRowid);
-  const token = jwt.sign({ userId: result.lastInsertRowid }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: result.lastInsertRowid, name, email } });
+  const result = await db.prepare('INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id').get(name, email, hash);
+  await db.prepare('INSERT INTO user_settings (user_id) VALUES ($1)').run(result.id);
+  const token = jwt.sign({ userId: result.id }, JWT_SECRET, { expiresIn: '7d' });
+  res.json({ token, user: { id: result.id, name, email } });
 });
 
 router.post('/login', async (req, res) => {

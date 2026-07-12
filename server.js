@@ -11,12 +11,13 @@ const statsRoutes = require('./api/stats');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+let dbReady = false;
 
 app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.0', timestamp: new Date().toISOString(), db: dbReady ? 'connected' : 'initializing' });
+  res.json({ status: 'ok', version: '2.1', db: dbReady ? 'connected' : 'initializing' });
 });
 
 app.use('/api/auth', authRoutes);
@@ -29,8 +30,8 @@ app.use(express.static(path.join(__dirname)));
 
 const pages = ['dashboard', 'tasks', 'calendar', 'charts', 'settings'];
 pages.forEach(page => {
-  app.get(`/${page}`, (req, res) => {
-    res.sendFile(path.join(__dirname, `${page}.html`));
+  app.get('/' + page, (req, res) => {
+    res.sendFile(path.join(__dirname, page + '.html'));
   });
 });
 
@@ -42,27 +43,30 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-let dbReady = false;
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 async function startDB(retries = 10, delay = 3000) {
   for (let i = 0; i < retries; i++) {
     try {
       await initDB();
       dbReady = true;
-      console.log('Database connected successfully');
+      console.log('Database connected');
       return;
     } catch (err) {
-      console.error(`DB init attempt ${i + 1}/${retries} failed:`, err.message);
+      console.error('DB attempt ' + (i + 1) + '/' + retries + ' failed:', err.message);
       if (i < retries - 1) {
         await new Promise(r => setTimeout(r, delay));
       }
     }
   }
-  console.error('Database init failed after all retries — API routes will fail until DB is available');
+  console.error('DB init failed after all retries');
 }
 
 startDB();
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`AI Planner running on http://localhost:${PORT}`);
+  console.log('AI Planner on port ' + PORT);
 });
