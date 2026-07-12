@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ar" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Planner — تسجيل الدخول</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+    .auth-container { width: min(90vw, 420px); }
+    .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; }
+    .auth-logo { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.75rem; justify-content: center; }
+    .auth-logo svg { width: 36px; height: 36px; }
+    .auth-logo span { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+    .auth-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    .auth-tab { flex: 1; padding: 0.65rem; text-align: center; font-weight: 600; font-size: 0.88rem; cursor: pointer; border: none; background: none; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .auth-form { display: none; }
+    .auth-form.active { display: block; }
+    .auth-form .btn-primary { width: 100%; justify-content: center; padding: 0.7rem; margin-top: 0.5rem; }
+    .auth-footer { text-align: center; margin-top: 1rem; font-size: 0.78rem; color: var(--muted); }
+    .theme-toggle-auth { position: fixed; top: 1rem; left: 1rem; }
+  </style>
+</head>
+<body>
+  <button class="btn-icon theme-toggle-auth theme-toggle" onclick="toggleTheme()" title="تبديل المظهر">☀️</button>
+  <div class="auth-container fade-in">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <svg viewBox="0 0 36 36" fill="none"><rect x="3" y="3" width="30" height="30" rx="8" stroke="currentColor" stroke-width="2.5"/><path d="M11 18l5 5 9-9" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>AI Planner</span>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchTab('login')">تسجيل الدخول</button>
+        <button class="auth-tab" onclick="switchTab('register')">حساب جديد</button>
+      </div>
+
+      <form id="loginForm" class="auth-form active" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label>البريد الإلكتروني</label>
+          <input type="email" id="loginEmail" required placeholder="admin@aiplanner.com">
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary">دخول</button>
+      </form>
+
+      <form id="registerForm" class="auth-form" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label>الاسم</label>
+          <input type="text" id="regName" required placeholder="اسمك">
+        </div>
+        <div class="form-group">
+          <label>البريد الإلكتروني</label>
+          <input type="email" id="regEmail" required placeholder="email@example.com">
+        </div>
+        <div class="form-group">
+          <label>كلمة المرور</label>
+          <input type="password" id="regPassword" required minlength="6" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary">إنشاء حساب</button>
+      </form>
+
+      <div class="auth-footer" id="authError" style="color: var(--danger); display: none;"></div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    initTheme();
+    if (getToken()) location.href = '/dashboard';
+
+    function switchTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+      if (tab === 'login') {
+        document.querySelectorAll('.auth-tab')[0].classList.add('active');
+        document.getElementById('loginForm').classList.add('active');
+      } else {
+        document.querySelectorAll('.auth-tab')[1].classList.add('active');
+        document.getElementById('registerForm').classList.add('active');
+      }
+      document.getElementById('authError').style.display = 'none';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('authError');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'خطأ في تسجيل الدخول'); return; }
+        setToken(data.token);
+        location.href = '/dashboard';
+      } catch { showError('خطأ في الاتصال بالخادم'); }
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('regName').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) { showError(data.error || 'خطأ في التسجيل'); return; }
+        setToken(data.token);
+        location.href = '/dashboard';
+      } catch { showError('خطأ في الاتصال بالخادم'); }
+    }
+  </script>
+</body>
+</html>
