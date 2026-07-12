@@ -1,5 +1,5 @@
 node_modules/
 db/planner.db*
 *.artifact.json
-${APPDATA}/
 .env
+${APPDATA}/
