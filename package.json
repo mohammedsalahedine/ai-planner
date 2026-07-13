@@ -1,6 +1,6 @@
 {
   "name": "ai-planner",
-  "version": "1.0.0",
+  "version": "2.3.0",
   "description": "AI-powered task scheduling web app",
   "main": "server.js",
   "engines": {
@@ -15,7 +15,6 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "pg": "^8.12.0"
+    "jsonwebtoken": "^9.0.2"
   }
 }
