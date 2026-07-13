@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.2', db: dbReady ? 'connected' : 'initializing' });
+  res.json({ status: 'ok', version: '3.0', db: dbReady ? 'connected' : 'initializing' });
 });
 
 app.use('/api/auth', authRoutes);

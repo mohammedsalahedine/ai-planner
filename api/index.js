@@ -11,12 +11,33 @@ const statsRoutes = require('../routes/stats');
 
 const app = express();
 let dbReady = false;
+let dbInitPromise = null;
 
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.2', db: dbReady ? 'connected' : 'initializing' });
+async function ensureDB() {
+  if (dbReady) return;
+  if (!dbInitPromise) {
+    dbInitPromise = initDB().then(() => {
+      dbReady = true;
+      console.log('Database connected');
+    }).catch(err => {
+      console.error('DB init failed:', err.message);
+      dbInitPromise = null;
+      throw err;
+    });
+  }
+  return dbInitPromise;
+}
+
+app.get('/health', async (req, res) => {
+  try {
+    await ensureDB();
+    res.json({ status: 'ok', version: '3.0', db: 'connected' });
+  } catch (err) {
+    res.json({ status: 'ok', version: '3.0', db: 'error: ' + err.message });
+  }
 });
 
 app.use('/api/auth', authRoutes);
@@ -39,22 +60,22 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-async function initOnce() {
-  if (dbReady) return;
-  try {
-    await initDB();
-    dbReady = true;
-    console.log('Database connected');
-  } catch (err) {
-    console.error('DB init failed:', err.message);
-  }
-}
+ensureDB();
 
-initOnce();
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('AI Planner on port ' + PORT);
+  });
+}
 
 module.exports = app;
