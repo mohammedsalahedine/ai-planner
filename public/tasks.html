@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ar" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Planner — المهام</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    initTheme();
+    if (!checkAuth()) throw new Error('Not authed');
+
+    document.getElementById('app').innerHTML = `
+      ${mobileHeaderHTML('المهام')}
+      ${sidebarHTML('tasks')}
+      <div class="main">
+        <div class="page-header">
+          <h1>المهام</h1>
+          <div style="display:flex;gap:0.5rem;">
+            <select id="filterCategory" onchange="loadTasks()" style="padding:0.5rem 0.75rem;">
+              <option value="">الكل</option>
+              <option value="book">كتاب</option>
+              <option value="course">دورة</option>
+              <option value="movie">فيلم</option>
+              <option value="project">مشروع</option>
+              <option value="training">تدريب</option>
+              <option value="custom">مهمة مخصصة</option>
+            </select>
+            <button class="btn btn-primary" onclick="openModal()">+ مهمة جديدة</button>
+          </div>
+        </div>
+        <div id="tasksContainer"></div>
+      </div>
+
+      <div class="modal-overlay" id="taskModal">
+        <div class="modal">
+          <h2 id="modalTitle">إضافة مهمة</h2>
+          <form onsubmit="saveTask(event)">
+            <input type="hidden" id="taskId">
+            <div class="form-group">
+              <label>اسم المهمة</label>
+              <input type="text" id="taskName" required placeholder="مثال: قراءة كتاب البرمجة">
+            </div>
+            <div class="form-group">
+              <label>الوصف</label>
+              <textarea id="taskDesc" rows="2" placeholder="تفاصيل المهمة..."></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>الفئة</label>
+                <select id="taskCategory">
+                  <option value="book">كتاب</option>
+                  <option value="course">دورة</option>
+                  <option value="movie">فيلم</option>
+                  <option value="project">مشروع</option>
+                  <option value="training">تدريب</option>
+                  <option value="custom" selected>مهمة مخصصة</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>الأولوية</label>
+                <select id="taskPriority">
+                  <option value="high">عالية</option>
+                  <option value="medium" selected>متوسطة</option>
+                  <option value="low">منخفضة</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>تاريخ البداية</label>
+                <input type="date" id="taskStart">
+              </div>
+              <div class="form-group">
+                <label>تاريخ النهاية</label>
+                <input type="date" id="taskEnd">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>المطلوب (ساعات/صفحات/دروس/دقائق)</label>
+                <input type="number" id="taskUnits" min="0" step="0.5" value="0">
+              </div>
+              <div class="form-group">
+                <label>نوع الوحدة</label>
+                <select id="taskUnitType">
+                  <option value="hours">ساعات</option>
+                  <option value="pages">صفحات</option>
+                  <option value="lessons">دروس</option>
+                  <option value="minutes">دقائق</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" id="completedGroup" style="display:none;">
+              <label>الإنجاز الحالي</label>
+              <input type="number" id="taskCompleted" min="0" step="0.5" value="0">
+            </div>
+            <div class="form-group" id="statusGroup" style="display:none;">
+              <label>الحالة</label>
+              <select id="taskStatus">
+                <option value="pending">قيد الانتظار</option>
+                <option value="in_progress">قيد التنفيذ</option>
+                <option value="completed">مكتملة</option>
+              </select>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-secondary" onclick="closeModal()">إلغاء</button>
+              <button type="submit" class="btn btn-primary">حفظ</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    loadUserInfo();
+
+    let allTasks = [];
+
+    function openModal(task) {
+      document.getElementById('taskModal').classList.add('show');
+      if (task) {
+        document.getElementById('modalTitle').textContent = 'تعديل المهمة';
+        document.getElementById('taskId').value = task.id;
+        document.getElementById('taskName').value = task.name;
+        document.getElementById('taskDesc').value = task.description;
+        document.getElementById('taskCategory').value = task.category;
+        document.getElementById('taskPriority').value = task.priority;
+        document.getElementById('taskStart').value = task.start_date || '';
+        document.getElementById('taskEnd').value = task.end_date || '';
+        document.getElementById('taskUnits').value = task.total_units;
+        document.getElementById('taskUnitType').value = task.unit_type;
+        document.getElementById('taskCompleted').value = task.completed_units;
+        document.getElementById('taskStatus').value = task.status;
+        document.getElementById('completedGroup').style.display = '';
+        document.getElementById('statusGroup').style.display = '';
+      } else {
+        document.getElementById('modalTitle').textContent = 'إضافة مهمة';
+        document.getElementById('taskId').value = '';
+        document.getElementById('taskName').value = '';
+        document.getElementById('taskDesc').value = '';
+        document.getElementById('taskCategory').value = 'custom';
+        document.getElementById('taskPriority').value = 'medium';
+        document.getElementById('taskStart').value = '';
+        document.getElementById('taskEnd').value = '';
+        document.getElementById('taskUnits').value = '0';
+        document.getElementById('taskUnitType').value = 'hours';
+        document.getElementById('completedGroup').style.display = 'none';
+        document.getElementById('statusGroup').style.display = 'none';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('taskModal').classList.remove('show');
+    }
+
+    async function saveTask(e) {
+      e.preventDefault();
+      const id = document.getElementById('taskId').value;
+      const body = {
+        name: document.getElementById('taskName').value,
+        description: document.getElementById('taskDesc').value,
+        category: document.getElementById('taskCategory').value,
+        priority: document.getElementById('taskPriority').value,
+        start_date: document.getElementById('taskStart').value || null,
+        end_date: document.getElementById('taskEnd').value || null,
+        total_units: parseFloat(document.getElementById('taskUnits').value) || 0,
+        unit_type: document.getElementById('taskUnitType').value,
+      };
+      try {
+        if (id) {
+          body.completed_units = parseFloat(document.getElementById('taskCompleted').value) || 0;
+          body.status = document.getElementById('taskStatus').value;
+          const result = await apiFetch(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+          if (result && result.error) { toast(result.error, 'error'); return; }
+          toast('تم تعديل المهمة');
+        } else {
+          const result = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(body) });
+          if (result && result.error) { toast(result.error, 'error'); return; }
+          toast('تم إضافة المهمة');
+        }
+        closeModal();
+        loadTasks();
+      } catch (err) {
+        toast('حدث خطأ: ' + err.message, 'error');
+      }
+    }
+
+    async function deleteTask(id) {
+      if (!confirm('هل أنت متأكد من حذف هذه المهمة؟')) return;
+      try {
+        await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+        toast('تم حذف المهمة');
+        loadTasks();
+      } catch (err) {
+        toast('حدث خطأ أثناء الحذف', 'error');
+      }
+    }
+
+    async function loadTasks() {
+      const filter = document.getElementById('filterCategory').value;
+      try {
+        const tasks = await apiFetch('/api/tasks');
+        if (!tasks || tasks.error) return;
+      allTasks = tasks;
+      const filtered = filter ? tasks.filter(t => t.category === filter) : tasks;
+      const container = document.getElementById('tasksContainer');
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg><p>لا توجد مهام بعد. أضف مهمتك الأولى!</p></div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>المهمة</th>
+                <th>الفئة</th>
+                <th>الأولوية</th>
+                <th>التقدم</th>
+                <th>الحالة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(t => {
+                const pct = t.total_units > 0 ? Math.round(t.completed_units / t.total_units * 100) : 0;
+                const statusLabel = { pending: 'قيد الانتظار', in_progress: 'قيد التنفيذ', completed: 'مكتملة' }[t.status] || t.status;
+                const statusColor = { pending: 'var(--muted)', in_progress: 'var(--accent)', completed: 'var(--success)' }[t.status];
+                return `
+                  <tr>
+                    <td>
+                      <div style="font-weight:600;">${t.name}</div>
+                      ${t.description ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">${t.description}</div>` : ''}
+                      ${t.start_date ? `<div style="font-size:0.72rem;color:var(--muted);margin-top:2px;font-family:var(--font-mono);">${formatDate(t.start_date)}${t.end_date ? ' → ' + formatDate(t.end_date) : ''}</div>` : ''}
+                    </td>
+                    <td><span style="font-size:0.82rem;">${categories[t.category]?.icon || ''} ${categories[t.category]?.label || t.category}</span></td>
+                    <td><span class="badge ${priorities[t.priority]?.class || ''}">${priorities[t.priority]?.label || t.priority}</span></td>
+                    <td style="min-width:120px;">
+                      <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:${pct}%"></div></div>
+                        <span style="font-size:0.75rem;font-family:var(--font-mono);color:var(--muted);min-width:35px;">${pct}%</span>
+                      </div>
+                    </td>
+                    <td><span style="font-size:0.82rem;color:${statusColor};font-weight:500;">${statusLabel}</span></td>
+                    <td>
+                      <div style="display:flex;gap:0.3rem;">
+                        <button class="btn-icon" onclick='openModal(${JSON.stringify(t).replace(/'/g, "&#39;")})' title="تعديل">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-icon" onclick="deleteTask(${t.id})" title="حذف" style="color:var(--danger);">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      } catch (err) {
+        console.error('Load tasks error:', err);
+      }
+    }
+
+    loadTasks();
+  </script>
+</body>
+</html>

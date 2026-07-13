@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ar" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Planner — الإعدادات</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    initTheme();
+    if (!checkAuth()) throw new Error('Not authed');
+
+    document.getElementById('app').innerHTML = `
+      ${mobileHeaderHTML('الإعدادات')}
+      ${sidebarHTML('settings')}
+      <div class="main">
+        <div class="page-header">
+          <h1>الإعدادات</h1>
+        </div>
+        <div style="max-width:640px;">
+          <div class="card" style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:1rem;">أوقات العمل</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>ساعات العمل يومياً</label>
+                <input type="number" id="dailyHours" min="1" max="24" step="0.5">
+              </div>
+              <div class="form-group">
+                <label>ساعات عمل عطلة نهاية الأسبوع</label>
+                <input type="number" id="weekendHours" min="0" max="24" step="0.5">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>بداية اليوم</label>
+                <input type="time" id="dayStart">
+              </div>
+              <div class="form-group">
+                <label>نهاية اليوم</label>
+                <input type="time" id="dayEnd">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>مدة الاستراحة (دقيقة)</label>
+              <input type="number" id="breakDuration" min="0" max="120" step="5">
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:1rem;">سرعة الإنجاز</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>سرعة القراءة (صفحة/ساعة)</label>
+                <input type="number" id="readingSpeed" min="1" max="200">
+              </div>
+              <div class="form-group">
+                <label>سرعة مشاهدة الدورات (درس/ساعة)</label>
+                <input type="number" id="courseSpeed" min="0.5" max="10" step="0.5">
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:1rem;">أيام الراحة</h3>
+            <div id="restDaysContainer" style="display:flex;flex-wrap:wrap;gap:0.5rem;"></div>
+          </div>
+
+          <div class="card" style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:1rem;">المظهر</h3>
+            <div style="display:flex;gap:0.75rem;">
+              <button class="btn btn-secondary" onclick="setTheme('dark');loadSettings();" id="themeDark">داكن</button>
+              <button class="btn btn-secondary" onclick="setTheme('light');loadSettings();" id="themeLight">فاتح</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:1rem;">الذكاء الاصطناعي (مجاني)</h3>
+            <div class="form-group">
+              <label>مزود AI</label>
+              <select id="aiProvider" style="width:100%;padding:0.5rem;border-radius:0.5rem;border:1px solid var(--border);background:var(--surface);color:var(--fg);font-size:0.9rem;margin-bottom:0.75rem;">
+                <option value="gemini">Google Gemini (مجاني — 1,500 طلب/يوم)</option>
+                <option value="groq">Groq (مجاني — 1,000 طلب/يوم، Llama 3.3)</option>
+                <option value="openrouter">OpenRouter (مجاني — 20+ نموذج)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>مفتاح API</label>
+              <input type="password" id="aiKey" placeholder="أدخل مفتاح API">
+              <small style="color:var(--muted);font-size:0.75rem;display:block;margin-top:0.25rem;">
+                <strong>Google Gemini (مُوصى به — مجاني بالكامل):</strong><br>
+                1. افتح <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/apikey</a><br>
+                2. اضغط "Create API Key" ← انسخ المفتاح<br>
+                3. الصقه هنا ← اختر المزود ← احفظ<br><br>
+                <strong>الحدود المجانية:</strong> 1,500 طلب/يوم، بدون بطاقة ائتمان، بدون انتهاء صلاحية.
+              </small>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;justify-content:center;padding:0.75rem;">
+            حفظ الإعدادات
+          </button>
+        </div>
+      </div>
+    `;
+
+    loadUserInfo();
+
+    const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    let restDays = [];
+
+    function renderRestDays() {
+      const container = document.getElementById('restDaysContainer');
+      container.innerHTML = dayNames.map((name, i) => `
+        <button class="btn btn-sm ${restDays.includes(i) ? 'btn-primary' : 'btn-secondary'}"
+          onclick="toggleRestDay(${i})" style="font-size:0.82rem;">
+          ${name}
+        </button>
+      `).join('');
+    }
+
+    function toggleRestDay(day) {
+      const idx = restDays.indexOf(day);
+      if (idx >= 0) restDays.splice(idx, 1);
+      else restDays.push(day);
+      renderRestDays();
+    }
+
+    async function loadSettings() {
+      const s = await apiFetch('/api/settings');
+      if (!s) return;
+      document.getElementById('dailyHours').value = s.daily_hours;
+      document.getElementById('weekendHours').value = s.weekend_hours;
+      document.getElementById('dayStart').value = s.day_start;
+      document.getElementById('dayEnd').value = s.day_end;
+      document.getElementById('breakDuration').value = s.break_duration;
+      document.getElementById('readingSpeed').value = s.reading_speed;
+      document.getElementById('courseSpeed').value = s.course_speed;
+      document.getElementById('aiKey').value = s.ai_key || '';
+      document.getElementById('aiProvider').value = s.ai_provider || 'gemini';
+      restDays = JSON.parse(s.rest_days || '[]');
+      renderRestDays();
+      updateThemeButtons();
+    }
+
+    function updateThemeButtons() {
+      const t = getTheme();
+      document.getElementById('themeDark').className = `btn btn-sm ${t === 'dark' ? 'btn-primary' : 'btn-secondary'}`;
+      document.getElementById('themeLight').className = `btn btn-sm ${t === 'light' ? 'btn-primary' : 'btn-secondary'}`;
+    }
+
+    async function saveSettings() {
+      const body = {
+        daily_hours: parseFloat(document.getElementById('dailyHours').value),
+        weekend_hours: parseFloat(document.getElementById('weekendHours').value),
+        day_start: document.getElementById('dayStart').value,
+        day_end: document.getElementById('dayEnd').value,
+        break_duration: parseFloat(document.getElementById('breakDuration').value),
+        reading_speed: parseFloat(document.getElementById('readingSpeed').value),
+        course_speed: parseFloat(document.getElementById('courseSpeed').value),
+        rest_days: restDays,
+        ai_key: document.getElementById('aiKey').value.trim(),
+        ai_provider: document.getElementById('aiProvider').value
+      };
+      await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify(body) });
+      toast('تم حفظ الإعدادات');
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

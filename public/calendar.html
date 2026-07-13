@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Planner — التقويم</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    initTheme();
+    if (!checkAuth()) throw new Error('Not authed');
+
+    let currentDate = new Date();
+    let currentView = 'month';
+    let scheduleData = [];
+
+    document.getElementById('app').innerHTML = `
+      ${mobileHeaderHTML('التقويم')}
+      ${sidebarHTML('calendar')}
+      <div class="main">
+        <div class="page-header">
+          <h1>التقويم</h1>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button class="btn-icon" onclick="changeMonth(-1)" title="الشهر السابق">‹</button>
+            <span id="calendarTitle" style="font-weight:600;min-width:160px;text-align:center;font-size:0.95rem;"></span>
+            <button class="btn-icon" onclick="changeMonth(1)" title="الشهر التالي">›</button>
+            <div style="width:1px;height:20px;background:var(--border);margin:0 0.25rem;"></div>
+            <button class="btn btn-sm ${currentView === 'month' ? 'btn-primary' : 'btn-secondary'}" onclick="setView('month')">شهري</button>
+            <button class="btn btn-sm ${currentView === 'week' ? 'btn-primary' : 'btn-secondary'}" onclick="setView('week')">أسبوعي</button>
+          </div>
+        </div>
+        <div id="calendarContainer"></div>
+      </div>
+    `;
+
+    loadUserInfo();
+
+    function setView(v) {
+      currentView = v;
+      document.querySelectorAll('.page-header .btn-sm').forEach(b => {
+        b.className = `btn btn-sm ${b.textContent.trim() === (v === 'month' ? 'شهري' : 'أسبوعي') ? 'btn-primary' : 'btn-secondary'}`;
+      });
+      renderCalendar();
+    }
+
+    function changeMonth(delta) {
+      if (currentView === 'month') {
+        currentDate.setMonth(currentDate.getMonth() + delta);
+      } else {
+        currentDate.setDate(currentDate.getDate() + (delta * 7));
+      }
+      loadSchedule();
+    }
+
+    async function loadSchedule() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      if (currentView === 'month') {
+        scheduleData = await apiFetch(`/api/schedule/month?year=${year}&month=${month}`);
+      } else {
+        scheduleData = await apiFetch('/api/schedule/week');
+      }
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      const title = document.getElementById('calendarTitle');
+      const container = document.getElementById('calendarContainer');
+
+      if (currentView === 'month') {
+        title.textContent = currentDate.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long' });
+        renderMonthView(container);
+      } else {
+        const startOfWeek = new Date(currentDate);
+        startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        title.textContent = `${startOfWeek.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' })} — ${endOfWeek.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        renderWeekView(container);
+      }
+    }
+
+    function renderMonthView(container) {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startOffset = firstDay.getDay();
+      const today = new Date();
+
+      const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      let html = '<div class="calendar-grid">';
+      dayNames.forEach(d => { html += `<div class="calendar-header">${d}</div>`; });
+
+      const prevMonth = new Date(year, month, 0);
+      for (let i = startOffset - 1; i >= 0; i--) {
+        const day = prevMonth.getDate() - i;
+        html += `<div class="calendar-day other-month"><div class="day-num">${day}</div></div>`;
+      }
+
+      for (let d = 1; d <= lastDay.getDate(); d++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+        const dayEvents = scheduleData.filter(s => s.date === dateStr);
+
+        html += `<div class="calendar-day ${isToday ? 'today' : ''}" data-date="${dateStr}">
+          <div class="day-num">${d}</div>
+          ${dayEvents.slice(0, 3).map(e => `
+            <div class="calendar-event cat-${e.category}" title="${e.task_name} ${e.start_time}-${e.end_time}" draggable="true" data-id="${e.id}" data-date="${dateStr}">
+              ${e.start_time} ${e.task_name}
+            </div>
+          `).join('')}
+          ${dayEvents.length > 3 ? `<div style="font-size:0.65rem;color:var(--muted);padding:2px 5px;">+${dayEvents.length - 3} أخرى</div>` : ''}
+        </div>`;
+      }
+
+      const totalCells = startOffset + lastDay.getDate();
+      const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+      for (let i = 1; i <= remaining; i++) {
+        html += `<div class="calendar-day other-month"><div class="day-num">${i}</div></div>`;
+      }
+
+      html += '</div>';
+      container.innerHTML = html;
+      initDragDrop();
+    }
+
+    function renderWeekView(container) {
+      const startOfWeek = new Date(currentDate);
+      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+      const today = new Date();
+      const hours = [];
+      for (let h = 6; h <= 22; h++) hours.push(`${String(h).padStart(2, '0')}:00`);
+
+      let html = '<div style="display:grid;grid-template-columns:60px repeat(7,1fr);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">';
+      html += '<div class="calendar-header" style="background:var(--surface-2);"></div>';
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        const isToday = d.toDateString() === today.toDateString();
+        html += `<div class="calendar-header" style="${isToday ? 'color:var(--accent);' : ''}">${dayNameShort(d)} ${d.getDate()}</div>`;
+      }
+
+      hours.forEach(hour => {
+        html += `<div style="padding:0.4rem;font-size:0.72rem;font-family:var(--font-mono);color:var(--muted);border-bottom:1px solid var(--border);text-align:center;">${hour}</div>`;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(startOfWeek);
+          d.setDate(startOfWeek.getDate() + i);
+          const dateStr = d.toISOString().split('T')[0];
+          const h = parseInt(hour.split(':')[0]);
+          const events = scheduleData.filter(s => {
+            if (s.date !== dateStr) return false;
+            const sh = parseInt(s.start_time.split(':')[0]);
+            return sh === h;
+          });
+          html += `<div style="border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:2px;min-height:40px;">`;
+          events.forEach(e => {
+            html += `<div class="calendar-event cat-${e.category}" style="font-size:0.65rem;" title="${e.task_name} ${e.start_time}-${e.end_time}">${e.task_name}</div>`;
+          });
+          html += '</div>';
+        }
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    function dayNameShort(d) {
+      return d.toLocaleDateString('ar-SA', { weekday: 'short' });
+    }
+
+    function initDragDrop() {
+      document.querySelectorAll('.calendar-event[draggable]').forEach(el => {
+        el.addEventListener('dragstart', e => {
+          e.dataTransfer.setData('text/plain', el.dataset.id);
+        });
+      });
+      document.querySelectorAll('.calendar-day[data-date]').forEach(el => {
+        el.addEventListener('dragover', e => { e.preventDefault(); el.style.background = 'var(--surface-2)'; });
+        el.addEventListener('dragleave', () => { el.style.background = ''; });
+        el.addEventListener('drop', async e => {
+          e.preventDefault();
+          el.style.background = '';
+          const taskId = e.dataTransfer.getData('text/plain');
+          const newDate = el.dataset.date;
+          if (taskId && newDate) {
+            toast('تم نقل المهمة إلى ' + newDate);
+          }
+        });
+      });
+    }
+
+    loadSchedule();
+  </script>
+</body>
+</html>

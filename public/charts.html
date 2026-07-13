@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ar" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Planner — الرسوم البيانية</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    initTheme();
+    if (!checkAuth()) throw new Error('Not authed');
+
+    let chartDays = 7;
+
+    document.getElementById('app').innerHTML = `
+      ${mobileHeaderHTML('الرسوم البيانية')}
+      ${sidebarHTML('charts')}
+      <div class="main">
+        <div class="page-header">
+          <h1>الرسوم البيانية</h1>
+          <div style="display:flex;gap:0.5rem;">
+            <button class="btn btn-sm ${chartDays === 7 ? 'btn-primary' : 'btn-secondary'}" onclick="setDays(7)">7 أيام</button>
+            <button class="btn btn-sm ${chartDays === 14 ? 'btn-primary' : 'btn-secondary'}" onclick="setDays(14)">14 يوم</button>
+            <button class="btn btn-sm ${chartDays === 30 ? 'btn-primary' : 'btn-secondary'}" onclick="setDays(30)">30 يوم</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+          <div class="chart-container">
+            <h3>ساعات العمل اليومية</h3>
+            <div id="hoursChart" style="height:200px;"></div>
+          </div>
+          <div class="chart-container">
+            <h3>المهام المنجزة يومياً</h3>
+            <div id="tasksChart" style="height:200px;"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div class="chart-container">
+            <h3>التوزيع حسب الفئة</h3>
+            <div id="categoryChart"></div>
+          </div>
+          <div class="chart-container">
+            <h3>ملخص الأداء</h3>
+            <div id="performanceSummary"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    loadUserInfo();
+
+    function setDays(d) {
+      chartDays = d;
+      document.querySelectorAll('.page-header .btn-sm').forEach(b => {
+        b.className = `btn btn-sm ${b.textContent.trim().includes(d) ? 'btn-primary' : 'btn-secondary'}`;
+      });
+      loadCharts();
+    }
+
+    async function loadCharts() {
+      const data = await apiFetch(`/api/stats/charts?days=${chartDays}`);
+      if (!data) return;
+
+      renderBarChart('hoursChart', data.map(d => ({ label: d.label, value: d.hours })), 'ساعة', 'var(--accent)');
+      renderBarChart('tasksChart', data.map(d => ({ label: d.label, value: d.tasks })), 'مهمة', 'var(--success)');
+
+      const catTotals = {};
+      data.forEach(d => {
+        Object.entries(d.categories || {}).forEach(([cat, count]) => {
+          catTotals[cat] = (catTotals[cat] || 0) + count;
+        });
+      });
+      renderCategoryChart(catTotals);
+
+      const totalHours = data.reduce((s, d) => s + d.hours, 0);
+      const totalTasks = data.reduce((s, d) => s + d.tasks, 0);
+      const totalCompleted = data.reduce((s, d) => s + d.completed, 0);
+      const avgHours = data.length > 0 ? (totalHours / data.length).toFixed(1) : 0;
+
+      document.getElementById('performanceSummary').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div class="stat-card"><div class="stat-label">إجمالي الساعات</div><div class="stat-value" style="font-size:1.3rem;">${totalHours.toFixed(1)}</div></div>
+          <div class="stat-card"><div class="stat-label">متوسط ساعات/يوم</div><div class="stat-value accent" style="font-size:1.3rem;">${avgHours}</div></div>
+          <div class="stat-card"><div class="stat-label">إجمالي المهام</div><div class="stat-value" style="font-size:1.3rem;">${totalTasks}</div></div>
+          <div class="stat-card"><div class="stat-label">المهام المنجزة</div><div class="stat-value success" style="font-size:1.3rem;">${totalCompleted}</div></div>
+        </div>
+      `;
+    }
+
+    function renderBarChart(containerId, data, unit, color) {
+      const container = document.getElementById(containerId);
+      const max = Math.max(...data.map(d => d.value), 1);
+      const barWidth = Math.max(100 / data.length - 2, 3);
+
+      container.innerHTML = `
+        <div style="display:flex;align-items:flex-end;gap:3px;height:160px;padding-top:20px;">
+          ${data.map(d => {
+            const h = (d.value / max) * 140;
+            return `
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+                <div style="font-size:0.65rem;font-family:var(--font-mono);color:var(--muted);margin-bottom:2px;">${d.value}</div>
+                <div style="width:100%;max-width:40px;height:${Math.max(h, 2)}px;background:${color};border-radius:3px 3px 0 0;transition:height 0.3s;" title="${d.label}: ${d.value} ${unit}"></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:3px;margin-top:4px;">
+          ${data.map(d => `<div style="flex:1;text-align:center;font-size:0.6rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.label}</div>`).join('')}
+        </div>
+      `;
+    }
+
+    function renderCategoryChart(catTotals) {
+      const container = document.getElementById('categoryChart');
+      const total = Object.values(catTotals).reduce((s, v) => s + v, 0);
+      if (total === 0) {
+        container.innerHTML = '<div class="empty-state"><p>لا توجد بيانات</p></div>';
+        return;
+      }
+
+      const colors = {
+        book: 'var(--accent)',
+        course: 'var(--success)',
+        movie: 'var(--warn)',
+        project: 'var(--danger)',
+        training: 'oklch(55% 0.15 300)',
+        custom: 'var(--muted)'
+      };
+
+      container.innerHTML = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).map(([cat, count]) => {
+        const pct = Math.round(count / total * 100);
+        return `
+          <div style="margin-bottom:0.6rem;">
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:0.25rem;">
+              <span>${categories[cat]?.icon || ''} ${categories[cat]?.label || cat}</span>
+              <span style="font-family:var(--font-mono);color:var(--muted);">${count} (${pct}%)</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${colors[cat] || 'var(--muted)'}"></div></div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    loadCharts();
+  </script>
+</body>
+</html>

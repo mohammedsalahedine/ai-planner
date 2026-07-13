@@ -3,11 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initDB } = require('./db/schema');
-const authRoutes = require('./api/auth');
-const taskRoutes = require('./api/tasks');
-const settingsRoutes = require('./api/settings');
-const scheduleRoutes = require('./api/schedule');
-const statsRoutes = require('./api/stats');
+const authRoutes = require('./routes/auth');
+const taskRoutes = require('./routes/tasks');
+const settingsRoutes = require('./routes/settings');
+const scheduleRoutes = require('./routes/schedule');
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '2.1', db: dbReady ? 'connected' : 'initializing' });
+  res.json({ status: 'ok', version: '2.2', db: dbReady ? 'connected' : 'initializing' });
 });
 
 app.use('/api/auth', authRoutes);
@@ -67,6 +67,10 @@ async function startDB(retries = 10, delay = 3000) {
 
 startDB();
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('AI Planner on port ' + PORT);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('AI Planner on port ' + PORT);
+  });
+}
+
+module.exports = app;

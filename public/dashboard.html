@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Planner — لوحة التحكم</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script src="/js/app.js"></script>
+  <script>
+    initTheme();
+    if (!checkAuth()) throw new Error('Not authed');
+
+    document.getElementById('app').innerHTML = `
+      ${mobileHeaderHTML('لوحة التحكم')}
+      ${sidebarHTML('dashboard')}
+      <div class="main">
+        <div class="page-header">
+          <h1>لوحة التحكم</h1>
+          <div style="display:flex; gap:0.5rem;">
+            <button class="btn btn-primary" onclick="generateSchedule()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              إنشاء جدول AI
+            </button>
+          </div>
+        </div>
+        <div class="stat-grid" id="statsGrid">
+          <div class="stat-card"><div class="stat-label">إجمالي المهام</div><div class="stat-value" id="totalTasks">—</div></div>
+          <div class="stat-card"><div class="stat-label">مهام مكتملة</div><div class="stat-value success" id="completedTasks">—</div></div>
+          <div class="stat-card"><div class="stat-label">نسبة الإنجاز</div><div class="stat-value accent" id="progress">—</div></div>
+          <div class="stat-card"><div class="stat-label">الساعات المتبقية اليوم</div><div class="stat-value" id="remainingHours">—</div></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;" id="dashCharts">
+          <div class="chart-container">
+            <h3>جدول اليوم</h3>
+            <div id="todaySchedule" style="font-size: 0.88rem;"></div>
+          </div>
+          <div class="chart-container">
+            <h3>التقدم حسب الفئة</h3>
+            <div id="categoryProgress"></div>
+          </div>
+        </div>
+        <div class="chart-container">
+          <h3>الأولويات</h3>
+          <div id="priorityBreakdown" style="display:flex;gap:1rem;flex-wrap:wrap;"></div>
+        </div>
+        <div class="chart-container" id="aiInsightsCard" style="display:none;margin-top:1rem;">
+          <h3>نصائح الذكاء الاصطناعي</h3>
+          <div id="aiInsights" style="font-size:0.92rem;line-height:1.7;color:var(--muted);"></div>
+        </div>
+      </div>
+    `;
+
+    loadUserInfo();
+
+    async function loadDashboard() {
+      const data = await apiFetch('/api/stats/dashboard');
+      if (!data) return;
+      document.getElementById('totalTasks').textContent = data.totalTasks;
+      document.getElementById('completedTasks').textContent = data.completedTasks;
+      document.getElementById('progress').textContent = data.progress + '%';
+      document.getElementById('remainingHours').textContent = data.remainingHours + 'h';
+
+      const sched = document.getElementById('todaySchedule');
+      if (data.todaySchedule.length === 0) {
+        sched.innerHTML = '<div class="empty-state"><p>لا يوجد جدول لليوم</p></div>';
+      } else {
+        sched.innerHTML = data.todaySchedule.map(s => `
+          <div style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border);">
+            <span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--muted);min-width:100px;">${s.start_time} - ${s.end_time}</span>
+            <span style="font-size:0.88rem;">${s.task_name}</span>
+          </div>
+        `).join('');
+      }
+
+      const catEl = document.getElementById('categoryProgress');
+      const cats = Object.entries(data.byCategory);
+      if (cats.length === 0) {
+        catEl.innerHTML = '<div class="empty-state"><p>لا توجد مهام بعد</p></div>';
+      } else {
+        catEl.innerHTML = cats.map(([cat, info]) => {
+          const pct = info.units > 0 ? Math.round(info.completedUnits / info.units * 100) : 0;
+          return `
+            <div style="margin-bottom:0.75rem;">
+              <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:0.3rem;">
+                <span>${categories[cat]?.icon || ''} ${categories[cat]?.label || cat}</span>
+                <span style="color:var(--muted);">${info.completed}/${info.count} — ${pct}%</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const priEl = document.getElementById('priorityBreakdown');
+      priEl.innerHTML = Object.entries(data.byPriority).map(([p, count]) => `
+        <div class="stat-card" style="flex:1;min-width:120px;text-align:center;">
+          <div class="stat-label">${priorities[p]?.label || p}</div>
+          <div class="stat-value" style="font-size:1.5rem;">${count}</div>
+        </div>
+      `).join('');
+    }
+
+    async function generateSchedule() {
+      toast('جاري إنشاء الجدول بالذكاء الاصطناعي...', 'success');
+      const data = await apiFetch('/api/schedule/generate', { method: 'POST' });
+      if (data && data.count !== undefined) {
+        toast(`تم إنشاء ${data.count} فترة زمنية`, 'success');
+        if (data.insights) {
+          const card = document.getElementById('aiInsightsCard');
+          document.getElementById('aiInsights').textContent = data.insights;
+          card.style.display = 'block';
+        }
+        loadDashboard();
+      } else {
+        toast('خطأ في إنشاء الجدول', 'error');
+      }
+    }
+
+    loadDashboard();
+  </script>
+</body>
+</html>

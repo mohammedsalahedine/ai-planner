@@ -3,3 +3,5 @@ db/planner.db*
 *.artifact.json
 .env
 ${APPDATA}/
+
+.vercel
