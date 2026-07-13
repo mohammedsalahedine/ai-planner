@@ -16,58 +16,44 @@ let dbReady = false;
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '3.0', db: dbReady ? 'connected' : 'initializing' });
+async function ensureDB() {
+  if (dbReady) return;
+  await initDB();
+  dbReady = true;
+}
+
+app.get('/health', async (req, res) => {
+  try { await ensureDB(); } catch(e) {}
+  res.json({ status: 'ok', version: '3.2', db: dbReady ? 'connected' : 'initializing' });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/schedule', scheduleRoutes);
-app.use('/api/stats', statsRoutes);
-
-app.use(express.static(path.join(__dirname)));
-
-const pages = ['dashboard', 'tasks', 'calendar', 'charts', 'settings'];
-pages.forEach(page => {
-  app.get('/' + page, (req, res) => {
-    res.sendFile(path.join(__dirname, page + '.html'));
-  });
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
+app.use('/api/auth', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, authRoutes);
+app.use('/api/tasks', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, taskRoutes);
+app.use('/api/settings', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, settingsRoutes);
+app.use('/api/schedule', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, scheduleRoutes);
+app.use('/api/stats', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, statsRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-async function startDB(retries = 10, delay = 3000) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      await initDB();
-      dbReady = true;
-      console.log('Database connected');
-      return;
-    } catch (err) {
-      console.error('DB attempt ' + (i + 1) + '/' + retries + ' failed:', err.message);
-      if (i < retries - 1) {
-        await new Promise(r => setTimeout(r, delay));
-      }
-    }
-  }
-  console.error('DB init failed after all retries');
-}
-
-startDB();
+ensureDB().catch(() => {});
 
 if (!process.env.VERCEL) {
+  app.use(express.static(path.join(__dirname)));
+  const pages = ['dashboard', 'tasks', 'calendar', 'charts', 'settings'];
+  pages.forEach(page => {
+    app.get('/' + page, (req, res) => {
+      res.sendFile(path.join(__dirname, page + '.html'));
+    });
+  });
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  });
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  });
   app.listen(PORT, '0.0.0.0', () => {
     console.log('AI Planner on port ' + PORT);
   });
