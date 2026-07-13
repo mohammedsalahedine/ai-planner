@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { initDB } = require('../db/schema');
 const authRoutes = require('../routes/auth');
 const taskRoutes = require('../routes/tasks');
@@ -34,35 +33,17 @@ async function ensureDB() {
 app.get('/health', async (req, res) => {
   try {
     await ensureDB();
-    res.json({ status: 'ok', version: '3.0', db: 'connected' });
+    res.json({ status: 'ok', version: '3.1', db: 'connected' });
   } catch (err) {
-    res.json({ status: 'ok', version: '3.0', db: 'error: ' + err.message });
+    res.json({ status: 'ok', version: '3.1', db: 'error: ' + err.message });
   }
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/schedule', scheduleRoutes);
-app.use('/api/stats', statsRoutes);
-
-const publicDir = path.join(__dirname, '..');
-app.use(express.static(publicDir));
-
-const pages = ['dashboard', 'tasks', 'calendar', 'charts', 'settings'];
-pages.forEach(page => {
-  app.get('/' + page, (req, res) => {
-    res.sendFile(path.join(publicDir, page + '.html'));
-  });
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
-});
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
-});
+app.use('/api/auth', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, authRoutes);
+app.use('/api/tasks', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, taskRoutes);
+app.use('/api/settings', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, settingsRoutes);
+app.use('/api/schedule', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, scheduleRoutes);
+app.use('/api/stats', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, statsRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
@@ -70,12 +51,5 @@ app.use((err, req, res, next) => {
 });
 
 ensureDB();
-
-if (!process.env.VERCEL) {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log('AI Planner on port ' + PORT);
-  });
-}
 
 module.exports = app;
