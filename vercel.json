@@ -1,6 +1,11 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
-    { "source": "/health", "destination": "/api/index.js" }
+    { "source": "/health", "destination": "/api/index.js" },
+    { "source": "/dashboard", "destination": "/public/dashboard.html" },
+    { "source": "/tasks", "destination": "/public/tasks.html" },
+    { "source": "/calendar", "destination": "/public/calendar.html" },
+    { "source": "/charts", "destination": "/public/charts.html" },
+    { "source": "/settings", "destination": "/public/settings.html" }
   ]
 }
