@@ -2,10 +2,10 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/health", "destination": "/api/index.js" },
-    { "source": "/dashboard", "destination": "/public/dashboard.html" },
-    { "source": "/tasks", "destination": "/public/tasks.html" },
-    { "source": "/calendar", "destination": "/public/calendar.html" },
-    { "source": "/charts", "destination": "/public/charts.html" },
-    { "source": "/settings", "destination": "/public/settings.html" }
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/tasks", "destination": "/tasks.html" },
+    { "source": "/calendar", "destination": "/calendar.html" },
+    { "source": "/charts", "destination": "/charts.html" },
+    { "source": "/settings", "destination": "/settings.html" }
   ]
 }
