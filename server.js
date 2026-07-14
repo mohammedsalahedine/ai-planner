@@ -40,19 +40,21 @@ app.use((err, req, res, next) => {
 
 ensureDB().catch(() => {});
 
+app.use(express.static(path.join(__dirname, 'public')));
+
+const pages = ['dashboard', 'tasks', 'calendar', 'charts', 'settings'];
+pages.forEach(page => {
+  app.get('/' + page, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', page + '.html'));
+  });
+});
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 if (!process.env.VERCEL) {
-  app.use(express.static(path.join(__dirname)));
-  const pages = ['dashboard', 'tasks', 'calendar', 'charts', 'settings'];
-  pages.forEach(page => {
-    app.get('/' + page, (req, res) => {
-      res.sendFile(path.join(__dirname, page + '.html'));
-    });
-  });
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-  });
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
   app.listen(PORT, '0.0.0.0', () => {
     console.log('AI Planner on port ' + PORT);

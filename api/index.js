@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { initDB } = require('../db/schema');
 const authRoutes = require('../routes/auth');
 const taskRoutes = require('../routes/tasks');
@@ -14,6 +15,8 @@ let dbInitPromise = null;
 
 app.use(cors());
 app.use(express.json());
+
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 async function ensureDB() {
   if (dbReady) return;
@@ -44,6 +47,11 @@ app.use('/api/tasks', async (req, res, next) => { try { await ensureDB(); next()
 app.use('/api/settings', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, settingsRoutes);
 app.use('/api/schedule', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, scheduleRoutes);
 app.use('/api/stats', async (req, res, next) => { try { await ensureDB(); next(); } catch(e) { res.status(503).json({error:'Database initializing'}); } }, statsRoutes);
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
+['dashboard', 'tasks', 'calendar', 'charts', 'settings'].forEach(p => {
+  app.get('/' + p, (req, res) => res.sendFile(path.join(__dirname, '..', 'public', p + '.html')));
+});
 
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
