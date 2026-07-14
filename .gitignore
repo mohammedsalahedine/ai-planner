@@ -6,3 +6,5 @@ db/data.json
 .vercel
 
 .env*
+
+${APPDATA}/npm/
